@@ -1,6 +1,6 @@
 // BruteForceZR.cpp
 
-#include "bruteForce.h"
+#include "BruteForce.h"
 
 // Generate passwords from numeric index
 std::string generate_password(uint64_t n, const std::string& charset, int length) {
@@ -66,17 +66,101 @@ void brute_worker(const std::string& file_path, const std::string& charset, int 
     }
 }
 
-int main(int argc, char* argv[]) {
-    if (argc < 5) {
-        std::cerr << "Usage: " << argv[0] << " <zip_file> <charset> <min_len> <max_len> [threads]\n";
-        return 1;
+void show_help() {
+    std::cout << "\n=== BruteForceZR Help ===\n";
+    std::cout << "This app attempts to brute-force the password of a ZIP file using a given character set and password length range.\n";
+    std::cout << "You will be prompted for:\n";
+    std::cout << "  - Path to the ZIP file\n";
+    std::cout << "  - Charset (characters to use in passwords, e.g., abc123\n";
+    std::cout << "  - Minimum and maximum password length\n";
+    std::cout << "  - Number of threads (0 for auto-detect)\n";
+    std::cout << "The app will then try all possible combinations in the given range.\n";
+    std::cout << "Best charsets:\n";
+    std::cout << "  - For numeric passwords: '0123456789'\n";
+    std::cout << "  - For alphanumeric passwords: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'\n";
+    std::cout << "  - For complex passwords: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?'\n";
+    std::cout << "The more characters and longer the password, the longer it will take.\n";
+    std::cout << "Press Enter to continue...\n";
+    std::cin.get();
+}
+
+bool run_bruteforce() {
+    // Reset global state for each run
+    found = false;
+    counter = 0;
+    correct_password.clear();
+
+    std::string file_path;
+    std::string charset;
+    int min_len, max_len, num_threads;
+
+    std::cout << "Enter path to ZIP file: ";
+    std::getline(std::cin, file_path);
+
+    std::cout << "Choose a charset option:\n";
+    std::cout << "  1. Numeric (0123456789)\n";
+    std::cout << "  2. Lowercase (abcdefghijklmnopqrstuvwxyz)\n";
+    std::cout << "  3. Uppercase (ABCDEFGHIJKLMNOPQRSTUVWXYZ)\n";
+    std::cout << "  4. Alphanumeric (abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789)\n";
+    std::cout << "  5. Complex (abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?)\n";
+    std::cout << "  6. Custom\n";
+    std::cout << "Enter your choice (1-6): ";
+
+    int charset_choice = 0;
+    while (!(std::cin >> charset_choice) || charset_choice < 1 || charset_choice > 6) {
+        std::cout << "Please enter a valid option (1-6): ";
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Clear input buffer
+
+    switch (charset_choice) {
+    case 1:
+        charset = "0123456789";
+        break;
+    case 2:
+        charset = "abcdefghijklmnopqrstuvwxyz";
+        break;
+    case 3:
+        charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        break;
+    case 4:
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        break;
+    case 5:
+        charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+        break;
+    case 6:
+        std::cout << "Enter your custom charset: ";
+        std::getline(std::cin, charset);
+        break;
     }
 
-    const std::string file_path = argv[1];
-    const std::string charset = argv[2];
-    const int min_len = std::stoi(argv[3]);
-    const int max_len = std::stoi(argv[4]);
-    const int num_threads = (argc > 5) ? std::stoi(argv[5]) : std::thread::hardware_concurrency();
+    std::cout << "Enter minimum password length: ";
+    while (!(std::cin >> min_len) || min_len <= 0) {
+        std::cout << "Please enter a valid positive integer for minimum length: ";
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
+
+    std::cout << "Enter maximum password length: ";
+    while (!(std::cin >> max_len) || max_len < min_len) {
+        std::cout << "Please enter a valid integer >= minimum length: ";
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
+
+    std::cout << "Enter number of threads (0 for auto): ";
+    while (!(std::cin >> num_threads) || num_threads < 0) {
+        std::cout << "Please enter a valid non-negative integer: ";
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
+    if (num_threads == 0) {
+        num_threads = std::thread::hardware_concurrency();
+        if (num_threads == 0) num_threads = 1;
+    }
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Clear input buffer
 
     for (int len = min_len; len <= max_len && !found; ++len) {
         const uint64_t total = static_cast<uint64_t>(pow(charset.size(), len));
@@ -95,14 +179,36 @@ int main(int argc, char* argv[]) {
 
     if (found) {
         std::cout << "Found password: " << correct_password << std::endl;
-		std::cout << "Total attempts: " << counter.load() << std::endl;
-		std::cout << "Press Enter to exit..." << std::endl;
-		std::cin.get();
-        return 0;
+        std::cout << "Total attempts: " << counter.load() << std::endl;
     }
-
-    std::cout << "Password not found" << std::endl;
-    std::cout << "Press Enter to exit..." << std::endl;
+    else {
+        std::cout << "Password not found" << std::endl;
+    }
+    std::cout << "Press Enter to continue..." << std::endl;
     std::cin.get();
-    return 1;
+    return found;
+}
+
+int main() {
+    while (true) {
+        std::string choice;
+        std::cout << "Do you want to crack a zip file or get to know how the app works?\n";
+        std::cout << "Type 'crack' to crack a zip file, 'help' for instructions, or 'exit' to quit: ";
+        std::getline(std::cin, choice);
+
+        if (choice == "help" || choice == "Help" || choice == "HELP") {
+            show_help();
+        }
+        else if (choice == "crack" || choice == "Crack" || choice == "CRACK") {
+            run_bruteforce();
+        }
+        else if (choice == "exit" || choice == "Exit" || choice == "EXIT" || choice.empty()) {
+            std::cout << "Exiting BruteForceZR. Goodbye!\n";
+            break;
+        }
+        else {
+            std::cout << "Unknown option. Please type 'crack', 'help', or 'exit'.\n";
+        }
+    }
+    return 0;
 }
