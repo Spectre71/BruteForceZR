@@ -4,8 +4,7 @@ A C++ applet made for cracking ZIP files with modern and legacy encryptions, suc
 
 ## Future
 - add support for RAR files,
-- CUDA computing for speed,
-- *update readme, add userManual to `README.md`, explain how code works.*
+- CUDA computing for speed.
 
 ## Features
 - Allows full ZIP decryption with progress reporting,
