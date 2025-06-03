@@ -15,7 +15,7 @@ A C++ applet made for cracking ZIP files with modern and legacy encryptions, suc
 - full error/exception handling.
 
 ## User Manual
-To use `BruteForceZR.exe`, simply launch it (open it in terminal with `.\BruteForceZR.exe`), and follow the prompts on screen -- really, it's straight fowrward. If you need an explanation of what the app does, and how it does it, there's currently a basic `help` section integrated into the app itself -- simply type "help" and hit enter. Essentially it opens up your specified ZIP file, checks how many files it includes, and starts generating passwords for the specified unit until it's found, then it asks you whether you want to rerun the process, or exit. There are also verey simple instructions written in the header file of the applet, but since that might disappear one day, here's the overview:
+To use `BruteForceZR.exe`, simply launch it (open it in terminal with `.\BruteForceZR.exe`), and follow the prompts on screen -- really, it's straight fowrward. If you need an explanation of what the app does, and how it does it, there's currently a basic `help` section integrated into the app itself -- simply type "help" and hit enter. Essentially it opens up your specified ZIP file, checks how many files it includes, and starts generating passwords for the specified unit until it's found, then it asks you whether you want to rerun the process, or exit. There are also very simple instructions written in the header file of the applet, but since that might disappear one day, here's the overview:
 
 - To compile the app using `g++`, run the following command:
 ```bash
