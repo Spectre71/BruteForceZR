@@ -33,11 +33,11 @@ g++ -O3 -std=c++23 -I "Path\to\packages\libzip-c.1.11.3.1\include"  -L "Path\to\
 
 ## Notes
 *Best charsets to use:*
-- Lowercase letters: abcdefghijklmnopqrstuvwxyz
-- Uppercase letters: ABCDEFGHIJKLMNOPQRSTUVWXYZ
-- Digits: 0123456789
-- Special characters: !@#$%^&*()-_=+[]{};:'",.<>?/|`~
-- Combination: abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{};:'",.<>?/|`~
+- Lowercase letters: `abcdefghijklmnopqrstuvwxyz`
+- Uppercase letters: `ABCDEFGHIJKLMNOPQRSTUVWXYZ`
+- Digits: `0123456789`
+- Special characters: `!@#$%^&*()-_=+[]{};:'",.<>?/|``~`
+- Combination: `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{};:'",.<>?/|``~`
 - Custom: You can create your own charset by combining any of the above characters.
 
   - Side Note: The more characters you include, the longer the cracking process will take.
