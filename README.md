@@ -22,7 +22,7 @@ To use `BruteForceZR.exe`, simply launch it (open it in terminal with `.\BruteFo
 g++ -O3 -std=c++23 -I "Path\to\packages\libzip-c.1.11.3.1\include"  -L "Path\to\packages\libzip-c.1.11.3.1\lib\windows\x64\release" -o BruteForceZR BruteForceZR.cpp -lzip -pthread -lz
 ```
 - Move the dll files into the location of the newly created `BruteForceZR.exe`,
-- Use the app as is (or wait gfor CUDA port -- may be worthwile).
+- Use the app as is (or wait for CUDA port -- may be worthwile).
 
 ## Requirements
 - Visual Studio
