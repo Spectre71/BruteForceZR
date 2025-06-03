@@ -14,22 +14,41 @@ std::string generate_password(uint64_t n, const std::string& charset, int length
     return password;
 }
 
+// List all files in the ZIP and return their names
+std::vector<std::string>list_zip_files(const std::string& file_path) {
+    std::vector<std::string> files;
+    int error;
+    zip_t* archive = zip_open(file_path.c_str(), ZIP_RDONLY, &error);
+    if (!archive) {
+        std::cerr << "Failed to open ZIP file.\n";
+        return files;
+    }
+    zip_int64_t num_files = zip_get_num_entries(archive, 0);
+    for (zip_uint64_t i = 0; i < num_files; i++) {
+		const char* name = zip_get_name(archive, i, 0);
+        if (name) {
+			files.push_back(name);
+        }
+    }
+    zip_close(archive);
+    return files;
+}
+
 // Validate password by checking decrypted content CRC
-bool validate_password(const std::string& file_path, const std::string& password) {
+bool validate_password(const std::string& file_path, zip_uint64_t file_index, const std::string& password) {
     int error;
     zip_t* archive = zip_open(file_path.c_str(), ZIP_RDONLY, &error);
     if (!archive) return false;
 
     // Get first file's metadata
     zip_stat_t stat;
-    if (zip_stat_index(archive, 0, 0, &stat) != 0) {
+    if (zip_stat_index(archive, file_index, 0, &stat) != 0) {
         zip_close(archive);
         return false;
     }
-    const unsigned long stored_crc = stat.crc;
 
     // Attempt to open encrypted file
-    zip_file_t* file = zip_fopen_index_encrypted(archive, 0, ZIP_FL_ENC_GUESS, password.c_str());
+    zip_file_t* file = zip_fopen_index_encrypted(archive, file_index, ZIP_FL_ENC_GUESS, password.c_str());
     if (!file) {
         zip_close(archive);
         return false;
@@ -47,18 +66,23 @@ bool validate_password(const std::string& file_path, const std::string& password
     uLong computed_crc = crc32(0L, Z_NULL, 0);
     computed_crc = crc32(computed_crc, reinterpret_cast<Bytef*>(buffer.data()), buffer.size());
 
-    return (computed_crc == stored_crc);
+    return (computed_crc == stat.crc);
 }
 
 // Parallel brute-force worker
-void brute_worker(const std::string& file_path, const std::string& charset, int length, uint64_t start, uint64_t end) {
-    for (uint64_t i = start; !found && i < end; ++i) {
+void brute_worker(const std::string& file_path, const std::string& charset, int length, uint64_t start, uint64_t end, zip_uint64_t file_index, std::atomic<bool>& found_local, std::string& found_password, int thread_id = 0) {
+    for (uint64_t i = start; !found_local && i < end; ++i) {
         std::string password = generate_password(i, charset, length);
-        if (validate_password(file_path, password)) {
+
+        if (thread_id == 0 && (i % 100 == 0)) {
+            std::cout << "\r\033[KTesting: " << password << std::flush; // Print current password being tested
+        }
+
+        if (validate_password(file_path, file_index, password)) {
             std::lock_guard<std::mutex> lock(mtx);
-            if (!found) {
-                found = true;
-                correct_password = password;
+            if (!found_local) {
+                found_local = true;
+                found_password = password;
             }
             return;
         }
@@ -96,6 +120,19 @@ bool run_bruteforce() {
 
     std::cout << "Enter path to ZIP file: ";
     std::getline(std::cin, file_path);
+	std::cout << "\n"; // Add a newline for better readability
+
+    // List files in ZIP
+    std::vector<std::string> files = list_zip_files(file_path);
+    if (files.empty()) {
+        std::cout << "No files found in ZIP or failed to open ZIP.\n";
+        return false;
+    }
+    std::cout << "ZIP contains " << files.size() << " file(s):\n";
+    for (size_t i = 0; i < files.size(); ++i) {
+        std::cout << "  [" << i << "] " << files[i] << "\n";
+    }
+	std::cout << "\n";
 
     std::cout << "Choose a charset option:\n";
     std::cout << "  1. Numeric (0123456789)\n";
@@ -133,6 +170,7 @@ bool run_bruteforce() {
     case 6:
         std::cout << "Enter your custom charset: ";
         std::getline(std::cin, charset);
+		std::cout << "\n"; // Add a newline for better readability
         break;
     }
 
@@ -162,31 +200,65 @@ bool run_bruteforce() {
     }
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Clear input buffer
 
-    for (int len = min_len; len <= max_len && !found; ++len) {
-        const uint64_t total = static_cast<uint64_t>(pow(charset.size(), len));
-        const uint64_t chunk = total / num_threads;
+    std::set<size_t> cracked_files;
+    while (true) {
+        size_t file_index = 0;
+        std::cout << "\nEnter the index of the file you want to crack (0-" << files.size() - 1 << "): ";
+        while (!(std::cin >> file_index) || file_index >= files.size() || cracked_files.count(file_index)) {
+            if (cracked_files.count(file_index)) {
+                std::cout << "File already cracked. Choose another: ";
+            }
+            else {
+                std::cout << "Please enter a valid file index: ";
+            }
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        }
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-        std::vector<std::thread> threads;
-        for (int i = 0; i < num_threads; ++i) {
-            uint64_t start = i * chunk;
-            uint64_t end = (i == num_threads - 1) ? total : start + chunk;
-            threads.emplace_back(brute_worker, file_path, charset, len, start, end);
+        std::atomic<bool> found_local(false);
+        std::string found_password;
+        counter = 0;
+
+        for (int len = min_len; len <= max_len && !found_local; ++len) {
+            const uint64_t total = static_cast<uint64_t>(pow(charset.size(), len));
+            const uint64_t chunk = total / num_threads;
+
+            std::vector<std::thread> threads;
+            for (int i = 0; i < num_threads; ++i) {
+                uint64_t start = i * chunk;
+                uint64_t end = (i == num_threads - 1) ? total : start + chunk;
+                threads.emplace_back(brute_worker, file_path, charset, len, start, end, file_index, std::ref(found_local), std::ref(found_password), i);
+            }
+
+            for (auto& t : threads) t.join();
+            if (found_local) break;
         }
 
-        for (auto& t : threads) t.join();
-        if (found) break;
-    }
+        if (found_local) {
+            std::cout << "\n\nFound password for '" << files[file_index] << "': " << found_password << "\n";
+            std::cout << "Total attempts: " << counter.load() << std::endl;
+            std::cout << "\n";
+            cracked_files.insert(file_index);
+        }
+        else {
+            std::cout << "Password not found for '" << files[file_index] << "'\n\n";
+        }
 
-    if (found) {
-        std::cout << "Found password: " << correct_password << std::endl;
-        std::cout << "Total attempts: " << counter.load() << std::endl;
+        // Ask user if they want to continue
+        if (cracked_files.size() == files.size()) {
+            std::cout << "All files have been processed.\n";
+            break;
+        }
+        std::string cont;
+        std::cout << "Do you want to crack another file? (y/n): ";
+        std::getline(std::cin, cont);
+        if (cont != "y" && cont != "Y") break;
     }
-    else {
-        std::cout << "Password not found" << std::endl;
-    }
-    std::cout << "Press Enter to continue..." << std::endl;
+    
+    std::cout << "Cracking session finished. Press Enter to continue...\n";
     std::cin.get();
-    return found;
+    return true;
 }
 
 bool first_run() {
